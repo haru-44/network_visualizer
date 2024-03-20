@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <title>Network Visualizer</title>
+    <meta charset="utf-8" />
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #wrapper {
+            display: flex;
+            height: 100%;
+        }
+
+        #network {
+            flex-grow: 1;
+        }
+
+        #controls {
+            flex-basis: 250px;
+            padding: 10px;
+        }
+
+        .node {
+            stroke: #fff;
+            stroke-width: 1.5px;
+        }
+
+        .link {
+            stroke: #999;
+            stroke-opacity: 0.6;
+        }
+
+        .texts {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="wrapper">
+        <div id="network"></div>
+        <div id="controls">
+            <input type="file" id="fileInput" /><br />
+            <hr />
+            <input type="checkbox" id="colorCheckbox" onchange="toggleNodeColor()" checked="true" />
+            <label for="colorCheckbox">ノードに色付けする</label><br />
+            <input type="checkbox" id="nameCheckbox" onchange="toggleNodeName()" checked="true" />
+            <label for="nameCheckbox">ノード名を表示する</label><br />
+            <input type="checkbox" id="directionCheckbox" onchange="toggleLinkDirection()" checked="true" />
+            <label for="directionCheckbox">有向グラフ</label>
+        </div>
+    </div>
+    <script>
+        nodes = [
+            { id: "ノード1", name: "Node 1", group: 1, explain: "This is node 1" },
+            { id: "ノード2", name: "Node 2", group: 2, explain: "This is node 2" },
+        ];
+
+        links = [
+            { source: "ノード1", target: "ノード2", value: 2 },
+        ];
+
+        function drawNetwork(event) {
+            d3.select("#network").html(""); // Clear
+
+            // ノードの色設定
+            if (nodes.some(node => node.hasOwnProperty('group'))) {
+                const label = document.querySelector("label[for='colorCheckbox']");
+                label.style.color = "black";
+                colorCheckbox.disabled = false;
+            } else {
+                const label = document.querySelector("label[for='colorCheckbox']");
+                label.style.color = "gray";
+                colorCheckbox.checked = false;
+                colorCheckbox.disabled = true;
+            }
+
+            // ウィンドウのサイズに基づいてサイズを設定
+            const width = window.innerWidth - (250 + 10 * 2);
+            const height = window.innerHeight;
+            const svg = d3.select("#network").append("svg")
+                .attr("width", "100%")
+                .attr("height", "100%");
+
+            // Zoom動作の定義
+            const zoom = d3.zoom()
+                .scaleExtent([1 / 4, 4]) // 最小縮小率と最大拡大率
+                .on("zoom", (event) => {
+                    g.attr("transform", event.transform);
+                });
+            svg.call(zoom); // SVGにZoom動作を適用
+
+            // グラフ要素のためのコンテナを追加
+            const g = svg.append("g");
+
+            svg.append("defs").selectAll("marker")
+                .data(["end"])
+                .enter().append("marker")
+                .attr("id", d => d)
+                .attr("viewBox", "0 -5 10 10")
+                .attr("refX", 15)
+                .attr("refY", 0)
+                .attr("markerWidth", 6)
+                .attr("markerHeight", 6)
+                .attr("orient", "auto")
+                .append("path")
+                .attr("fill", "#999")
+                .attr("d", "M0,-5L10,0L0,5");
+
+            color = d3.scaleOrdinal(d3.schemeCategory10);
+            const simulation = d3.forceSimulation(nodes)
+                .force("link", d3.forceLink(links)
+                    .id(d => d.id)
+                    .distance(100) // リンクの距離
+                    .strength(0.5) // リンクの強度
+                )
+                .force("charge", d3.forceManyBody().strength(-100)) // 斥力
+                .force("center", d3.forceCenter(width / 2, height / 2));
+
+            link = g.append("g")
+                .attr("class", "links")
+                .selectAll("line")
+                .data(links)
+                .enter().append("line")
+                .attr("stroke", "#999")
+                .attr("stroke-opacity", 0.6)
+                .attr("stroke-width", 1.5);
+            toggleLinkDirection();
+
+            node = g.append("g")
+                .attr("class", "nodes")
+                .selectAll("circle")
+                .data(nodes)
+                .enter().append("circle")
+                .attr("r", 5);
+            toggleNodeColor();
+
+            // ノード名をテキストとして追加
+            text = g.append("g")
+                .attr("class", "texts")
+                .selectAll("text")
+                .data(nodes)
+                .enter().append("text")
+                .attr("x", 8)
+                .attr("y", ".31em")
+                .text(d => d.name);
+            toggleNodeName();
+
+            // ツールチップの追加
+            node.append("title")
+                .text(d => d.explain);
+            link.append("title")
+                .text(d => d.value);
+
+            simulation.on("tick", () => {
+                link.attr("x1", d => d.source.x)
+                    .attr("y1", d => d.source.y)
+                    .attr("x2", d => d.target.x)
+                    .attr("y2", d => d.target.y);
+                node.attr("cx", d => d.x)
+                    .attr("cy", d => d.y);
+                text.attr("x", d => d.x + 8)
+                    .attr("y", d => d.y + 3);
+            });
+
+            // ノードにドラッグ機能を適用
+            node.call(d3.drag()
+                .on("start", (event, d) => {
+                    if (!event.active) {
+                        simulation.alphaTarget(0.3).restart();
+                    }
+                    d.fx = d.x;
+                    d.fy = d.y;
+                })
+                .on("drag", (event, d) => {
+                    d.fx = event.x;
+                    d.fy = event.y;
+                })
+                .on("end", (event, d) => {
+                    if (!event.active) {
+                        simulation.alphaTarget(0);
+                    }
+                    d.fx = null;
+                    d.fy = null;
+                }));
+        }
+
+        /**
+         * チェックボックスの状態に従ってノードの色を変更
+         */
+        function toggleNodeColor() {
+            if (colorCheckbox.checked) {
+                node.style("fill", (d) => color(d.group));
+            } else {
+                node.style("fill", "black");
+            }
+        }
+
+        /**
+         * チェックボックスの状態に従ってノード名の表示を変更
+         */
+        function toggleNodeName() {
+            if (nameCheckbox.checked) {
+                text.style("display", "block");
+            } else {
+                text.style("display", "none");
+            }
+        }
+
+        /**
+         * チェックボックスの状態に従って有向辺に変更
+         */
+        function toggleLinkDirection() {
+            if (directionCheckbox.checked) {
+                link.attr("marker-end", "url(#end)");
+            } else {
+                link.attr("marker-end", "");
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", drawNetwork);
+
+        document.getElementById("fileInput").addEventListener("change", function (event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const content = e.target.result;
+                    if (file.name.endsWith(".json")) {
+                        const data = JSON.parse(content);
+                        nodes = data.nodes;
+                        nodes.forEach(node => {
+                            if (!node.hasOwnProperty('name')) {
+                                node.name = node.id;
+                            }
+                        });
+                        links = data.links;
+                        drawNetwork(data);
+                    } else if (file.name.endsWith(".csv")) {
+                        const data = d3.csvParse(content);
+                        links = data.map(d => ({ source: d.source, target: d.target, value: d.value }));
+                        nodes = Array.from(new Set(links.flatMap(link => [link.source, link.target]))).map(id => ({ id, name: id }));
+                        drawNetwork(data);
+                    } else {
+                        alert("ファイル形式が不正です");
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+    </script>
+</body>
+
+</html>
