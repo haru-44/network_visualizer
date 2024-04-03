@@ -52,3 +52,8 @@ source,target,value
 ![image](/README_img/network.png)
 
 無線従事者資格の包含関係を示しています。
+
+![image](/README_img/pref.png)
+
+東北6県の隣接関係を示しています。
+
