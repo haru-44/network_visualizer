@@ -56,8 +56,10 @@
             <label for="colorCheckbox">ノードに色付けする</label><br />
             <input type="checkbox" id="nameCheckbox" onchange="toggleNodeName()" checked="true" />
             <label for="nameCheckbox">ノード名を表示する</label><br />
+            <input type="checkbox" id="nodeFixCheckbox" onchange="toggleNodeFix()" />
+            <label for="nodeFixCheckbox">ノードを固定する</label><br />
             <input type="checkbox" id="directionCheckbox" onchange="toggleLinkDirection()" checked="true" />
-            <label for="directionCheckbox">有向グラフ</label>
+            <label for="directionCheckbox">有向グラフ</label><br />
         </div>
     </div>
     <script>
@@ -190,8 +192,17 @@
                     if (!event.active) {
                         simulation.alphaTarget(0);
                     }
-                    d.fx = null;
-                    d.fy = null;
+                    if (nodeFixCheckbox.checked) {
+                        node.each(d => {
+                            d.fx = d.x;
+                            d.fy = d.y;
+                        });
+                    } else {
+                        node.each(d => {
+                            d.fx = null;
+                            d.fy = null;
+                        });
+                    }
                 }));
         }
 
@@ -228,6 +239,23 @@
             }
         }
 
+        /**
+         * チェックボックスの状態に従ってノードの固定を変更
+         */
+        function toggleNodeFix() {
+            if (nodeFixCheckbox.checked) {
+                node.each(d => {
+                    d.fx = d.x;
+                    d.fy = d.y;
+                });
+            } else {
+                node.each(d => {
+                    d.fx = null;
+                    d.fy = null;
+                });
+            }
+        }
+
         document.addEventListener("DOMContentLoaded", drawNetwork);
 
         document.getElementById("fileInput").addEventListener("change", function (event) {
@@ -245,11 +273,13 @@
                             }
                         });
                         links = data.links;
+                        nodeFixCheckbox.checked = false;
                         drawNetwork(data);
                     } else if (file.name.endsWith(".csv")) {
                         const data = d3.csvParse(content);
                         links = data.map(d => ({ source: d.source, target: d.target, value: d.value }));
                         nodes = Array.from(new Set(links.flatMap(link => [link.source, link.target]))).map(id => ({ id, name: id }));
+                        nodeFixCheckbox.checked = false;
                         drawNetwork(data);
                     } else {
                         alert("ファイル形式が不正です");
